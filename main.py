@@ -35,7 +35,7 @@ sheet = service.spreadsheets()
 sheet_id = "13XBmtqHjl85CtgTnbnHCqTgOdT4liOSuiPPsMk81U2U"
 
 resp = sheet.values().get(spreadsheetId=sheet_id, range="жидкости!A4:D131").execute().get('values', [])
-#get_background_color('C125')
+get_background_color('C125')
 #jsonString = json.dumps(resp[0])
 #pprint(jsonString[0])
 liquids_name = []
