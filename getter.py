@@ -1,8 +1,9 @@
 import os
+from pprint import pprint
 import httplib2
 from googleapiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
-from pprint import pprint
+
 
 CREDENTIALS_FILE = '/gs_credentials.json'
 sheet_id = "13XBmtqHjl85CtgTnbnHCqTgOdT4liOSuiPPsMk81U2U"
@@ -135,3 +136,5 @@ def get_ras():
         result[res] = t
 
     return result
+
+get_liquids()
