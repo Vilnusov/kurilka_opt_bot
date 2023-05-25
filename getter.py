@@ -7,7 +7,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 CREDENTIALS_FILE = '/gs_credentials.json'
 sheet_id = "13XBmtqHjl85CtgTnbnHCqTgOdT4liOSuiPPsMk81U2U"
-cells_liquids = 'жидкости!A4:D131'
+cells_liquids = 'жидкости!A4:D130'
 cells_ras = 'расходники!A4:E67'
 
 
@@ -146,4 +146,3 @@ def get_ras():
         result[res] = t
 
     return result
-
