@@ -12,7 +12,8 @@ from typing import Optional
 from aiogram.filters.callback_data import CallbackData
 
 
-class NumbersCallbackFactory(CallbackData, prefix="my"):
+class CallbackFactory(CallbackData, prefix="my"):
+    action: str
     value: str
 
 
@@ -21,15 +22,18 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 
-liquids_name = InlineKeyboardBuilder()
-liquids_taste = InlineKeyboardBuilder()
+liquids = get_liquids()
+liquids_name = {}
+liquids_mg_keyboard = InlineKeyboardBuilder()
+liquids_keyboard = InlineKeyboardBuilder()
+liquids_taste_keyboard = InlineKeyboardBuilder()
 
 
-for name in get_liquids():
-    print(name[0])
-    liquids_name.button(InlineKeyboardButton(text=name[0], callback_data=NumbersCallbackFactory(value=name[0])))
+for mg in liquids:
+    print(mg)
+    liquids_mg_keyboard.button(text=mg, callback_data=CallbackFactory(action="mg", value=mg))
 
-liquids_name.adjust(1)
+liquids_mg_keyboard.adjust(1)
 
 
 @dp.message(Command("start"))
@@ -41,24 +45,32 @@ async def cmd_start(message: types.Message):
 async def cmd_random(message: types.Message):
     await message.answer(
         'text',
-        reply_markup=liquids_name.as_markup()
+        reply_markup=liquids_mg_keyboard.as_markup()
     )
 
+liq_mg = ''
+liq_name = ''
+liq_taste = ''
+@dp.callback_query(CallbackFactory.filter())
+async def callbacks_num_change_fab(callback: types.CallbackQuery, callback_data: CallbackFactory):
 
-@dp.callback_query(NumbersCallbackFactory.filter())
-async def callbacks_num_change_fab(
-        callback: types.CallbackQuery,
-        callback_data: NumbersCallbackFactory
-):
-    await callback.message.edit_text(
-        callback_data.value,
-    )
-    await callback.answer()
+    if callback_data.action == 'mg':
+        liq_mg = callback_data.value
+        for name in liquids[callback_data.value]:
+            print(name)
+            liquids_keyboard.button(text=name, callback_data=CallbackFactory(action='name', value=name))
+    if callback_data.action == 'name':
+        liq_name = callback_data.value
+        for taste in liquids[liq_mg][callback_data.value]:
+            print(taste)
+            liquids_keyboard.button(text=taste[0], callback_data=CallbackFactory(action='taste', value=taste))
 
-@dp.callback_query(Text("name"))
-async def send_random_value(callback: types.CallbackQuery):
+    liq = liq_mg + ' ' + liq_name + ' ' + liq_taste
+
+    liquids_keyboard.adjust(1)
     await callback.message.edit_text(
-        'asd'
+        liq,
+        reply_markup=liquids_keyboard.as_markup()
     )
     await callback.answer()
 

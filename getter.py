@@ -54,6 +54,8 @@ def get_liquids():
         if len(value) <= 1:
             resp.remove(value)
         for val in value:
+            if val == '':
+                value.remove(val)
             if val == 'От 100р' or val == '0':
                 resp.remove(value)
 
@@ -70,12 +72,20 @@ def get_liquids():
             liq.append(resp[j])
         liquids.append(liq)
 
-    result = []
+    result = {}
+    t = {}
     for liq in liquids:
+        liq[1][0] = ''.join(liq[1][0].split(':'))
+        result[liq[1][0]] = {}
+    for res in result:
         t = {}
-        for i in range(2, len(liq)):
-            t[liq[i][1]] = liq[i][2]
-        result.append([liq[0][0], liq[1][0], liq[1][3], t])
+        for liq in liquids:
+            n = []
+            if res == liq[1][0]:
+                for i in range(2, len(liq)):
+                    n.append(liq[i])
+                t[liq[0][0]] = n
+        result[res] = t
 
     return result
 
@@ -137,4 +147,3 @@ def get_ras():
 
     return result
 
-get_liquids()
