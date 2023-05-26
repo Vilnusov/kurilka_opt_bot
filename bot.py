@@ -1,5 +1,8 @@
 from random import random
 from pprint import pprint
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from cfg import *
 from getter import get_liquids
 import asyncio
@@ -33,15 +36,22 @@ def get_liquids_mg_keyboard():
     builder = InlineKeyboardBuilder()
     liquids = get_liquids()
     for mg in liquids:
-        print(mg)
         builder.button(text=mg, callback_data=CallbackFactory(action="mg", value=mg))
-    builder.adjust(2)
+    builder.adjust(1)
+    return builder
+
+
+def get_main_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text='Жидкости', callback_data=CallbackFactory(action='liquids'))
+    builder.button(text='Расходники', callback_data=CallbackFactory(action='ras'))
+    builder.adjust(1)
     return builder
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("Hello!\nНапиши /random")
+    await message.answer("Привет! Выбери, что хочешь заказать:", reply_markup=get_main_keyboard().as_markup())
 
 
 @dp.message(Command("random"))
@@ -58,39 +68,44 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
     global liq_mg
     global liq_name
     global liq_taste
+    text = '='
     builder = InlineKeyboardBuilder()
+
     if callback_data.action == 'back':
-        callback_data.action = 'mg'
-        callback_data.value = 'Salt 50mg | Объем 30мл'
-    if callback_data.action == 'mg':
+        if callback_data.value == 'liquids':
+            builder = get_main_keyboard()
+        elif callback_data.value == 'mg':
+            callback_data.action = 'liquids'
+        elif callback_data.value == 'name':
+            callback_data.action = 'mg'
+            callback_data.value = liq_mg
+
+    if callback_data.action == 'liquids':
+        text = 'Выберите крепкость и объем жидкости:'
+        builder = get_liquids_mg_keyboard()
+    elif callback_data.action == 'mg':
+        text = 'Выберите жидкость:'
+        if callback_data.action == callback_data.value:
+            callback_data.value = liq_mg
         liq_mg = callback_data.value
         for name in liquids[callback_data.value]:
-            print(name)
             builder.button(text=name, callback_data=CallbackFactory(action='name', value=name))
     elif callback_data.action == 'name':
+        text = 'Выберите вкус жидкости:'
         liq_name = callback_data.value
         for taste in liquids[liq_mg][callback_data.value]:
-            print(taste)
             builder.button(text=taste[0], callback_data=CallbackFactory(action='taste', value=taste[0]))
     elif callback_data.action == 'taste':
         liq_taste = callback_data.value
 
 
-    liq = liq_mg + ' ' + liq_name + ' ' + liq_taste
-
-    builder.adjust(2)
-
-    builder.button(text='🔙Назад', callback_data=CallbackFactory(action='back'))
-    await callback.message.edit_caption(
-        caption=liq,
+    builder.button(text='🔙Назад', callback_data=CallbackFactory(action='back', value=callback_data.action))
+    builder.adjust(1)
+    await callback.message.edit_text(
+        text=text,
         reply_markup=builder.as_markup()
     )
     await callback.answer()
-
-
-@dp.callback_query(Text("back"))
-async def go_back(callback: types.CallbackQuery):
-    await callback
 
 
 async def main():
@@ -98,5 +113,13 @@ async def main():
     await dp.start_polling(bot)
 
 
+def start():
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    asyncio.run(*asyncio.create_task(get_liquids()))
+
+
 if __name__ == "__main__":
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(start)
+    scheduler.start()
     asyncio.run(main())
