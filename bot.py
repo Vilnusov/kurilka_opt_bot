@@ -20,7 +20,7 @@ class CallbackFactory(CallbackData, prefix="my"):
     value: Optional[str]
 
 
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
@@ -34,7 +34,6 @@ liquids = []
 def get_liquids_mg_keyboard():
     global liquids
     builder = InlineKeyboardBuilder()
-    liquids = get_liquids()
     for mg in liquids:
         builder.button(text=mg, callback_data=CallbackFactory(action="mg", value=mg))
     builder.adjust(1)
@@ -109,17 +108,32 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
 
 
 async def main():
+    print('start')
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 
-def start():
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(*asyncio.create_task(get_liquids()))
+async def get_res():
+    global liquids
+    while True:
+        liquids = get_liquids()
+        print(liquids)
+        await asyncio.sleep(10)
+
+
+async def tasks():
+    print('t')
+    task = asyncio.create_task(get_res())
+    await task
+
+
+def m():
+    print('m')
+    asyncio.run(main())
+    asyncio.run(tasks())
 
 
 if __name__ == "__main__":
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(start)
+    scheduler.add_job(m())
     scheduler.start()
-    asyncio.run(main())
