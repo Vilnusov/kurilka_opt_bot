@@ -46,31 +46,29 @@ def get_main_keyboard():
     builder.button(text='Жидкости', callback_data=CallbackFactory(action='liquids'))
     builder.button(text='Расходники', callback_data=CallbackFactory(action='ras'))
     builder.button(text='🗑Корзина', callback_data=CallbackFactory(action='cart'))
-    builder.adjust(1)
+    builder.adjust(2, 1)
     return builder
 
 
 def get_counter_keyboard():
-    buttons = [
-        [
-            types.InlineKeyboardButton(text="-1", callback_data="num_decr"),
-            types.InlineKeyboardButton(text="+1", callback_data="num_incr")
-        ],
-        [types.InlineKeyboardButton(text="Подтвердить", callback_data="num_finish")],
-    ]
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
-    return keyboard
+    builder = InlineKeyboardBuilder()
+    builder.button(text='-1', callback_data=CallbackFactory(action='num_decr'))
+    builder.button(text='+1', callback_data=CallbackFactory(action='num_incr'))
+    builder.button(text='Подтвердить', callback_data=CallbackFactory(action='num_confirm'))
+    builder.adjust(2, 1)
+    return builder
 
 
+@dp.message(Command("num"))
 async def cmd_numbers(message: types.Message):
     user_data[message.from_user.id] = 0
-    await message.answer("Укажите количество: 1", reply_markup=get_counter_keyboard())
+    await message.answer("Укажите количество: 1", reply_markup=get_counter_keyboard().as_markup())
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     #Добавить проверку
-    user_data[message.from_user.username] = []
+    user_data[message.from_user.username] = [None] * 3
     await message.answer(
         f"{message.from_user.full_name}, Добро пожаловать\nВыбери, что хочешь заказать или просмотри свой заказ:",
         reply_markup=get_main_keyboard().as_markup()
@@ -79,12 +77,13 @@ async def cmd_start(message: types.Message):
 
 @dp.message(Command("admin"))
 async def cmd_start(message: types.Message):
-    result = ''
-    for order in user_data:
-        result += order + ':\n\t' + str(user_data[order])
-    await message.answer(
-        f"Заказы:\n{result}"
-    )
+    if message.from_user.id in ADMINS:
+        result = ''
+        for order in user_data:
+            result += order + ':\n\t' + str(user_data[order])
+        await message.answer(
+            f"Заказы:\n{result}"
+        )
 
 
 @dp.callback_query(CallbackFactory.filter())
@@ -114,6 +113,21 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         else:
             text = 'Вы еще ничего не добвили в корзину!'
 
+    if callback_data.action == 'num_decr':
+        if user_data[callback.from_user.username][1] is None:
+            user_data[callback.from_user.username][1] = 1
+        user_data[callback.from_user.username][1] -= 1
+        text = f'Укажите количество: {user_data[callback.from_user.username][1]}'
+        builder = get_counter_keyboard()
+    elif callback_data.action == 'num_incr':
+        if user_data[callback.from_user.username][1] is None:
+            user_data[callback.from_user.username][1] = 1
+        user_data[callback.from_user.username][1] += 1
+        text = f'Укажите количество: {user_data[callback.from_user.username][1]}'
+        builder = get_counter_keyboard()
+    elif callback_data.action == 'num_confirm':
+        pass
+
     if callback_data.action == 'liquids':
         text = 'Выберите крепкость и объем жидкости:'
         builder = get_liquids_mg_keyboard()
@@ -131,13 +145,11 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         for taste in liquids[liq_mg][callback_data.value]:
             builder.button(text=taste[0], callback_data=CallbackFactory(action='taste', value=taste[0]))
     elif callback_data.action == 'taste':
-        text = 'Укажите число: -'
+        text = 'Укажите количество: 1'
         builder = get_counter_keyboard()
-        await cmd_numbers(callback.message)
-        return
-        #liq_taste = callback_data.value
+        liq_taste = callback_data.value
 
-        #user_data[callback.from_user.username].append([liq_name + ' ' + liq_taste, 0, liquids[liq_mg][liq_name][0][2]])
+        user_data[callback.from_user.username].append([liq_name + ' ' + liq_taste, 0, liquids[liq_mg][liq_name][0][2]])
         #await callback.message.edit_text(text='Жидкость добавлена', reply_markup=get_main_keyboard().as_markup())
         #return
 
@@ -153,7 +165,7 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
 async def update_num_text(message: types.Message, new_value: int):
     await message.edit_text(
         f"Укажите число: {new_value}",
-        reply_markup=get_counter_keyboard()
+        reply_markup=get_counter_keyboard().as_markup()
     )
 
 
