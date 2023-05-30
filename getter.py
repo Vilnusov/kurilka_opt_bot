@@ -7,7 +7,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 CREDENTIALS_FILE = '/gs_credentials.json'
 sheet_id = "13XBmtqHjl85CtgTnbnHCqTgOdT4liOSuiPPsMk81U2U"
-cells_liquids = 'жидкости!A4:D160'
+cells_liquids = 'жидкости!A4:D1337'
 cells_ras = 'расходники!A4:E67'
 
 
@@ -31,11 +31,14 @@ def get_background_color(cells):
     response = response['sheets'][0]['data'][0]['rowData']
     status = []
     for color in response:
-        color = color['values'][0]['effectiveFormat']['backgroundColor']
-        col = list(color)[0]
-        if col == 'red' and color[col] == 1 and len(color) == 1:
-            status.append(False)
-        else:
+        try:
+            color = color['values'][0]['effectiveFormat']['backgroundColor']
+            col = list(color)[0]
+            if col == 'red' and color[col] == 1 and len(color) == 1:
+                status.append(False)
+            else:
+                status.append(True)
+        except:
             status.append(True)
     return status
 
@@ -57,7 +60,11 @@ def get_liquids():
             if val == '':
                 value.remove(val)
             if val == 'От 100р' or val == '0':
-                resp.remove(value)
+                try:
+                    resp.remove(value)
+                    break
+                except:
+                    pass
 
     for i in range(len(resp)):
         for val in resp[i]:
@@ -75,6 +82,8 @@ def get_liquids():
     result = {}
     t = {}
     for liq in liquids:
+        if ':' in liq[0][0]:
+            liq[0][0] = ' '.join(liq[0][0].split(':'))
         liq[1][0] = ''.join(liq[1][0].split(':'))
         result[liq[1][0]] = {}
     for res in result:
@@ -83,7 +92,8 @@ def get_liquids():
             n = []
             if res == liq[1][0]:
                 for i in range(2, len(liq)):
-                    n.append(liq[i])
+                    if not len(liq[i]) <= 1:
+                        n.append(liq[i])
                 t[liq[0][0]] = n
         result[res] = t
 
@@ -103,7 +113,6 @@ def get_ras():
         if len(value) <= 1:
             resp.remove(value)
         if len(value) == 4 and (value[2] == '0' and value[4] == '0'):
-            print(value)
             resp.remove(value)
         for val in value:
             if val == '':

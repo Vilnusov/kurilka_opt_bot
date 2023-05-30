@@ -1,18 +1,12 @@
-from random import random
-from pprint import pprint
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from cfg import *
 from getter import get_liquids
 import asyncio
-import logging
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, Text
+from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import Optional
 from aiogram.filters.callback_data import CallbackData
+from aiogram.enums.parse_mode import ParseMode
 
 
 class CallbackFactory(CallbackData, prefix="my"):
@@ -20,8 +14,8 @@ class CallbackFactory(CallbackData, prefix="my"):
     value: Optional[str]
 
 
-#'https://kalix.club/uploads/posts/2022-12/1671755316_kalix-club-p-veip-art-oboi-66.jpg'
-#logging.basicConfig(level=logging.INFO)
+# 'https://kalix.club/uploads/posts/2022-12/1671755316_kalix-club-p-veip-art-oboi-66.jpg'
+# logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
@@ -59,16 +53,18 @@ def get_counter_keyboard():
     return builder
 
 
-@dp.message(Command("num"))
+@dp.message(Command("test"))
 async def cmd_numbers(message: types.Message):
-    user_data[message.from_user.id] = 0
-    await message.answer("Укажите количество: 1", reply_markup=get_counter_keyboard().as_markup())
+    button_text = 'Текст кнопки'
+    builder = InlineKeyboardBuilder()
+    builder.button(text=f"~{button_text}~", callback_data='asd')
+    await message.answer("Текст с ~зачеркнутой~ кнопкой", reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    #Добавить проверку
-    user_data[message.from_user.username] = [None] * 3
+    # Добавить проверку
+    user_data[message.from_user.username] = [1]
     await message.answer(
         f"{message.from_user.full_name}, Добро пожаловать\nВыбери, что хочешь заказать или просмотри свой заказ:",
         reply_markup=get_main_keyboard().as_markup()
@@ -77,10 +73,10 @@ async def cmd_start(message: types.Message):
 
 @dp.message(Command("admin"))
 async def cmd_start(message: types.Message):
-    if message.from_user.id in ADMINS:
+    if str(message.from_user.id) in ADMINS:
         result = ''
         for order in user_data:
-            result += order + ':\n\t' + str(user_data[order])
+            result += f'{order} :\n\t{user_data[order]}'
         await message.answer(
             f"Заказы:\n{result}"
         )
@@ -106,27 +102,20 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         elif callback_data.value == 'name':
             callback_data.action = 'mg'
             callback_data.value = liq_mg
+        elif callback_data.value in ['taste', 'num_decr', 'num_incr']:
+            callback_data.action = 'name'
+            callback_data.value = liq_name
+            user_data[callback.from_user.username][0] = 1
 
+    if callback_data.action == 'del':
+        text = get_cart(callback.from_user.username)
+        text += '\nВведите номер позиции, которую хотите удалить:'
     if callback_data.action == 'cart':
-        if len(get_cart(callback.from_user.username)) != 0:
+        if get_cart(callback.from_user.username) != '\nИтого: 0 BYN':
             text = get_cart(callback.from_user.username)
+            builder.button(text='Удалить позицию', callback_data=CallbackFactory(action='del'))
         else:
             text = 'Вы еще ничего не добвили в корзину!'
-
-    if callback_data.action == 'num_decr':
-        if user_data[callback.from_user.username][1] is None:
-            user_data[callback.from_user.username][1] = 1
-        user_data[callback.from_user.username][1] -= 1
-        text = f'Укажите количество: {user_data[callback.from_user.username][1]}'
-        builder = get_counter_keyboard()
-    elif callback_data.action == 'num_incr':
-        if user_data[callback.from_user.username][1] is None:
-            user_data[callback.from_user.username][1] = 1
-        user_data[callback.from_user.username][1] += 1
-        text = f'Укажите количество: {user_data[callback.from_user.username][1]}'
-        builder = get_counter_keyboard()
-    elif callback_data.action == 'num_confirm':
-        pass
 
     if callback_data.action == 'liquids':
         text = 'Выберите крепкость и объем жидкости:'
@@ -143,15 +132,52 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         text = 'Выберите вкус жидкости:'
         liq_name = callback_data.value
         for taste in liquids[liq_mg][callback_data.value]:
-            builder.button(text=taste[0], callback_data=CallbackFactory(action='taste', value=taste[0]))
+            txt = ''
+            if not taste[1]:
+                txt = '⛔️'
+            txt += taste[0]
+            if len(f'my:taste:{txt}'.encode()) > 64:
+                while len(f'my:taste:{txt}'.encode()) > 61:
+                    txt = txt[:-1]
+                txt += '...'
+            builder.button(text=txt, callback_data=CallbackFactory(action='taste', value=txt))
     elif callback_data.action == 'taste':
+        if '⛔️' in callback_data.value:
+            await callback.answer(
+                text="Данной жидкости нет в наличии!",
+                show_alert=True
+            )
+            return
         text = 'Укажите количество: 1'
         builder = get_counter_keyboard()
         liq_taste = callback_data.value
 
-        user_data[callback.from_user.username].append([liq_name + ' ' + liq_taste, 0, liquids[liq_mg][liq_name][0][2]])
-        #await callback.message.edit_text(text='Жидкость добавлена', reply_markup=get_main_keyboard().as_markup())
-        #return
+    if callback_data.action == 'num_decr':
+        if user_data[callback.from_user.username][0] == 1:
+            await callback.answer(
+                text="Количество не может быть меньше одного!",
+                show_alert=True
+            )
+            return
+        else:
+            user_data[callback.from_user.username][0] -= 1
+        text += f'Укажите количество: {user_data[callback.from_user.username][0]}'
+        builder = get_counter_keyboard()
+    elif callback_data.action == 'num_incr':
+        user_data[callback.from_user.username][0] += 1
+        text = f'Укажите количество: {user_data[callback.from_user.username][0]}'
+        builder = get_counter_keyboard()
+    elif callback_data.action == 'num_confirm':
+        user_data[callback.from_user.username].append([liq_name + ' ' + liq_taste,
+                                                       user_data[callback.from_user.username][0],
+                                                       liquids[liq_mg][liq_name][0][2]]
+                                                      )
+        user_data[callback.from_user.username][0] = 1
+        await callback.message.edit_text(
+            text='Жидкость добавлена!\nВыбери, что хочешь заказать или просмотри свой заказ:',
+            reply_markup=get_main_keyboard().as_markup()
+        )
+        return
 
     builder.button(text='🔙Назад', callback_data=CallbackFactory(action='back', value=callback_data.action))
     builder.adjust(1)
@@ -159,31 +185,6 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         text=text,
         reply_markup=builder.as_markup()
     )
-    await callback.answer()
-
-
-async def update_num_text(message: types.Message, new_value: int):
-    await message.edit_text(
-        f"Укажите число: {new_value}",
-        reply_markup=get_counter_keyboard().as_markup()
-    )
-
-
-@dp.callback_query(Text(startswith="num_"))
-async def callbacks_num(callback: types.CallbackQuery):
-    user_value = user_data.get(callback.from_user.id, 1)
-    print(user_data)
-    action = callback.data.split("_")[1]
-
-    if action == "incr":
-        user_data[callback.from_user.id] = user_value+1
-        await update_num_text(callback.message, user_value+1)
-    elif action == "decr":
-        user_data[callback.from_user.id] = user_value-1
-        await update_num_text(callback.message, user_value-1)
-    elif action == "finish":
-        await callback.message.edit_text(f"Итого: {user_value}")
-
     await callback.answer()
 
 
@@ -204,9 +205,11 @@ def get_cart(username):
     res = ''
     price = 0
     for item in user_data[username]:
-        res += str(user_data[username].index(item) + 1) + '. ' + item[0] + ' - ' + str(item[1]) + 'шт - ' + item[2] + 'BYN\n'
+        if user_data[username].index(item) == 0:
+            continue
+        res += f'{user_data[username].index(item)}. {item[0]} - {item[1]}шт - {item[2]} BYN\n'
         price += float('.'.join(item[2].split(',')))
-    res += f'\nВсего: {price} BYN'
+    res += f'\nИтого: {price} BYN'
     return res
 
 
