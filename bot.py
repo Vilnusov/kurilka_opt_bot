@@ -1,5 +1,10 @@
+import datetime
+
+from aiogram.fsm.context import FSMContext
+
 from cfg import *
 from getter import get_liquids
+from aiogram.fsm.state import StatesGroup, State
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -12,6 +17,10 @@ from aiogram.enums.parse_mode import ParseMode
 class CallbackFactory(CallbackData, prefix="my"):
     action: str
     value: Optional[str]
+
+
+class StateDel(StatesGroup):
+    choosing_num = State()
 
 
 # 'https://kalix.club/uploads/posts/2022-12/1671755316_kalix-club-p-veip-art-oboi-66.jpg'
@@ -58,13 +67,17 @@ async def cmd_numbers(message: types.Message):
     button_text = 'Текст кнопки'
     builder = InlineKeyboardBuilder()
     builder.button(text=f"~{button_text}~", callback_data='asd')
-    await message.answer("Текст с ~зачеркнутой~ кнопкой", reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)
+    await message.answer(
+        "Текст с ~зачеркнутой~ кнопкой",
+        reply_markup=builder.as_markup(),
+        parse_mode=ParseMode.MARKDOWN_V2
+    )
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     # Добавить проверку
-    user_data[message.from_user.username] = [1]
+    user_data[message.from_user.username] = [1, 1]
     await message.answer(
         f"{message.from_user.full_name}, Добро пожаловать\nВыбери, что хочешь заказать или просмотри свой заказ:",
         reply_markup=get_main_keyboard().as_markup()
@@ -83,7 +96,8 @@ async def cmd_start(message: types.Message):
 
 
 @dp.callback_query(CallbackFactory.filter())
-async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callback_data: CallbackFactory):
+async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callback_data: CallbackFactory,
+                                            state: FSMContext):
     global liq_mg
     global liq_name
     global liq_taste
@@ -106,11 +120,20 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
             callback_data.action = 'name'
             callback_data.value = liq_name
             user_data[callback.from_user.username][0] = 1
+        elif callback_data.value == 'del':
+            callback_data.action = 'cart'
 
     if callback_data.action == 'del':
         text = get_cart(callback.from_user.username)
         text += '\nВведите номер позиции, которую хотите удалить:'
+        callback_data.value = 'del'
+        user_data[callback.from_user.username][1] = callback.message.message_id
+        await state.set_state(StateDel.choosing_num)
+
     if callback_data.action == 'cart':
+        print(callback.from_user)
+        print('\n\n')
+        print(callback)
         if get_cart(callback.from_user.username) != '\nИтого: 0 BYN':
             text = get_cart(callback.from_user.username)
             builder.button(text='Удалить позицию', callback_data=CallbackFactory(action='del'))
@@ -188,6 +211,18 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
     await callback.answer()
 
 
+@dp.message()
+async def num_chosen(message: types.Message):
+    msg = types.Message(message_id=1, date=datetime.datetime(1, 1, 1), chat=types.Chat(id=1, type='1'))
+    msg = message
+    msg.message_id = user_data[message.from_user.username][1]
+    print(msg)
+    callback_query = types.CallbackQuery(id="1", from_user=message.from_user, chat_instance=message.chat.id,
+                                         message=msg)
+    await message.delete()
+    await callbacks_change_liquids_keyboard(callback_query, CallbackFactory(action='cart'), None)
+
+
 async def main():
     asyncio.create_task(get_res())
     await bot.delete_webhook(drop_pending_updates=True)
@@ -202,6 +237,7 @@ async def get_res():
 
 
 def get_cart(username):
+    print('\t' + username)
     res = ''
     price = 0
     for item in user_data[username]:
