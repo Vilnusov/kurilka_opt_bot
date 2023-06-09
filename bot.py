@@ -12,6 +12,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import Optional
 from aiogram.filters.callback_data import CallbackData
 from aiogram.enums.parse_mode import ParseMode
+from aiogram.methods.delete_message import DeleteMessage
 
 
 class CallbackFactory(CallbackData, prefix="my"):
@@ -77,7 +78,7 @@ async def cmd_numbers(message: types.Message):
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     # Добавить проверку
-    user_data[message.from_user.username] = [1, 1]
+    user_data[message.from_user.username] = [[1, 1], []]
     await message.answer(
         f"{message.from_user.full_name}, Добро пожаловать\nВыбери, что хочешь заказать или просмотри свой заказ:",
         reply_markup=get_main_keyboard().as_markup()
@@ -119,7 +120,7 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         elif callback_data.value in ['taste', 'num_decr', 'num_incr']:
             callback_data.action = 'name'
             callback_data.value = liq_name
-            user_data[callback.from_user.username][0] = 1
+            user_data[callback.from_user.username][0][0] = 1
         elif callback_data.value == 'del':
             callback_data.action = 'cart'
 
@@ -127,13 +128,10 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         text = get_cart(callback.from_user.username)
         text += '\nВведите номер позиции, которую хотите удалить:'
         callback_data.value = 'del'
-        user_data[callback.from_user.username][1] = callback.message.message_id
+        user_data[callback.from_user.username][0][1] = callback.message.message_id
         await state.set_state(StateDel.choosing_num)
 
     if callback_data.action == 'cart':
-        print(callback.from_user)
-        print('\n\n')
-        print(callback)
         if get_cart(callback.from_user.username) != '\nИтого: 0 BYN':
             text = get_cart(callback.from_user.username)
             builder.button(text='Удалить позицию', callback_data=CallbackFactory(action='del'))
@@ -176,26 +174,26 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         liq_taste = callback_data.value
 
     if callback_data.action == 'num_decr':
-        if user_data[callback.from_user.username][0] == 1:
+        if user_data[callback.from_user.username][0][0] == 1:
             await callback.answer(
                 text="Количество не может быть меньше одного!",
                 show_alert=True
             )
             return
         else:
-            user_data[callback.from_user.username][0] -= 1
-        text += f'Укажите количество: {user_data[callback.from_user.username][0]}'
+            user_data[callback.from_user.username][0][0] -= 1
+        text += f'Укажите количество: {user_data[callback.from_user.username][0][0]}'
         builder = get_counter_keyboard()
     elif callback_data.action == 'num_incr':
-        user_data[callback.from_user.username][0] += 1
-        text = f'Укажите количество: {user_data[callback.from_user.username][0]}'
+        user_data[callback.from_user.username][0][0] += 1
+        text = f'Укажите количество: {user_data[callback.from_user.username][0][0]}'
         builder = get_counter_keyboard()
     elif callback_data.action == 'num_confirm':
-        user_data[callback.from_user.username].append([liq_name + ' ' + liq_taste,
-                                                       user_data[callback.from_user.username][0],
+        user_data[callback.from_user.username][1].append([liq_name + ' ' + liq_taste,
+                                                       user_data[callback.from_user.username][0][0],
                                                        liquids[liq_mg][liq_name][0][2]]
                                                       )
-        user_data[callback.from_user.username][0] = 1
+        user_data[callback.from_user.username][0][0] = 1
         await callback.message.edit_text(
             text='Жидкость добавлена!\nВыбери, что хочешь заказать или просмотри свой заказ:',
             reply_markup=get_main_keyboard().as_markup()
@@ -211,16 +209,22 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
     await callback.answer()
 
 
-@dp.message()
+@dp.message(StateDel.choosing_num)
 async def num_chosen(message: types.Message):
-    msg = types.Message(message_id=1, date=datetime.datetime(1, 1, 1), chat=types.Chat(id=1, type='1'))
-    msg = message
-    msg.message_id = user_data[message.from_user.username][1]
-    print(msg)
-    callback_query = types.CallbackQuery(id="1", from_user=message.from_user, chat_instance=message.chat.id,
-                                         message=msg)
+    builder = InlineKeyboardBuilder()
+    if get_cart(message.from_user.username) != '\nИтого: 0 BYN':
+        text = get_cart(message.from_user.username)
+        builder.button(text='Удалить позицию', callback_data=CallbackFactory(action='del'))
+    else:
+        text = 'Вы еще ничего не добвили в корзину!'
+    builder.button(text='🔙Назад', callback_data=CallbackFactory(action='back', value='cart'))
+    builder.adjust(1)
     await message.delete()
-    await callbacks_change_liquids_keyboard(callback_query, CallbackFactory(action='cart'), None)
+    await bot.delete_message(message.chat.id, user_data[message.from_user.username][0][1])
+    await message.answer(
+        text=text,
+        reply_markup=builder.as_markup()
+    )
 
 
 async def main():
@@ -237,13 +241,10 @@ async def get_res():
 
 
 def get_cart(username):
-    print('\t' + username)
     res = ''
     price = 0
-    for item in user_data[username]:
-        if user_data[username].index(item) == 0:
-            continue
-        res += f'{user_data[username].index(item)}. {item[0]} - {item[1]}шт - {item[2]} BYN\n'
+    for item in user_data[username][1]:
+        res += f'{user_data[username][1].index(item) + 1}. {item[0]} - {item[1]}шт - {item[2]} BYN\n'
         price += float('.'.join(item[2].split(',')))
     res += f'\nИтого: {price} BYN'
     return res
