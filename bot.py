@@ -371,7 +371,7 @@ async def get_res():
     while True:
         liquids = get_liquids()
         ras = get_ras()
-        await asyncio.sleep(10)
+        await asyncio.sleep(60)
 
 
 async def main():
