@@ -1,4 +1,5 @@
 import os
+from cfg import end_liquids, end_ras
 from pprint import pprint
 import httplib2
 from googleapiclient.discovery import build
@@ -7,8 +8,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 CREDENTIALS_FILE = '/gs_credentials.json'
 sheet_id = "13XBmtqHjl85CtgTnbnHCqTgOdT4liOSuiPPsMk81U2U"
-cells_liquids = 'жидкости!A4:D1337'
-cells_ras = 'расходники!A4:E67'
+cells_liquids = f'жидкости!A4:D{end_liquids}'
+cells_ras = f'расходники!A4:E{end_ras}'
 
 
 def get_service_sacc():

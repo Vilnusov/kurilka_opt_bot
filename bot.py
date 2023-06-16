@@ -19,6 +19,10 @@ class StateDel(StatesGroup):
     choosing_num = State()
 
 
+class States(StatesGroup):
+    start = State()
+
+
 # 'https://kalix.club/uploads/posts/2022-12/1671755316_kalix-club-p-veip-art-oboi-66.jpg'
 # logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN, parse_mode='HTML')
@@ -66,34 +70,53 @@ def get_counter_keyboard():
 
 
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    # Добавить проверку
-    print(ras)
-    liq_mg = ''
-    liq_name = ''
-    liq_taste = ''
-    ras_type = ''
-    ras_proizv = ''
-    ras_device = ''
-    add = bool
-    count = 1
-    id_msg = 1
-    user_data[message.from_user.username] =\
-        [[count, id_msg, liq_mg, liq_name, liq_taste, ras_type, ras_proizv, ras_device, add], []]
-    await message.answer(
-        f"{message.from_user.full_name}, Добро пожаловать\nВыбери, что хочешь заказать или просмотри свой заказ:",
-        reply_markup=get_main_keyboard().as_markup()
-    )
+async def cmd_start(message: types.Message, state: FSMContext):
+        # Добавить проверку
+        liq_mg = ''
+        liq_name = ''
+        liq_taste = ''
+        ras_type = ''
+        ras_proizv = ''
+        ras_device = ''
+        add = bool
+        count = 1
+        id_msg = 1
+        user_data[message.from_user.username] =\
+            [[count, id_msg, liq_mg, liq_name, liq_taste, ras_type, ras_proizv, ras_device, add], []]
+        await message.answer(
+            f"{message.from_user.full_name}, Добро пожаловать\nВыбери, что хочешь заказать или просмотри свой заказ:",
+            reply_markup=get_main_keyboard().as_markup()
+        )
 
 
 @dp.message(Command("admin"))
-async def cmd_start(message: types.Message):
+async def cmd_admin(message: types.Message):
+    if str(message.from_user.id) in ADMINS:
+        result = ''
+        price = 0
+        for order in user_data:
+            price_user = 0
+            result += f'\n\n{order} :'
+            for item in user_data[order][1]:
+                result += f'\n\t{item[0]} - {item[1]}шт'
+                price_user += float('.'.join(item[2].split(','))) * item[1]
+                price += float('.'.join(item[2].split(','))) * item[1]
+            result += f'\n{price_user} BYN'
+        result += f'\n\nВсего: {price} BYN'
+        await message.answer(
+            f"{result}", parse_mode=None
+        )
+
+
+@dp.message(Command("list"))
+async def cmd_admin(message: types.Message):
     if str(message.from_user.id) in ADMINS:
         result = ''
         for order in user_data:
-            result += f'{order} :\n\t{user_data[order]}'
+            for item in user_data[order][1]:
+                result += f'\n{item[0]} - {item[1]}шт'
         await message.answer(
-            f"Заказы:\n{result}"
+            f"{result}", parse_mode=None
         )
 
 
@@ -112,7 +135,7 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
 
     # Назад
     if callback_data.action == 'back':
-        if callback_data.value == 'liquids' or callback_data.value == 'type' or callback_data.value == 'cart':
+        if callback_data.value == 'liquids' or callback_data.value == 'ras' or callback_data.value == 'cart':
             await callback.message.edit_text(
                 'Выбери, что хочешь заказать или просмотри свой заказ:',
                 reply_markup=get_main_keyboard().as_markup()
@@ -126,6 +149,15 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         elif callback_data.value in ['taste', 'num_decr', 'num_incr']:
             callback_data.action = 'name'
             callback_data.value = liq_name
+            user_data[callback.from_user.username][0][0] = 1
+        elif callback_data.value == 'type':
+            callback_data.action = 'ras'
+        elif callback_data.value == 'device':
+            callback_data.action = 'type'
+            callback_data.value = ras_type
+        elif callback_data.value in ['dev', 'num_decr', 'num_incr']:
+            callback_data.action = 'device'
+            callback_data.value = ras_proizv
             user_data[callback.from_user.username][0][0] = 1
         elif callback_data.value == 'del':
             await state.set_state()
@@ -206,6 +238,7 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
             txt += f'{device[0]} {device[1]}Ом {device[3]}BYN'
             builder.button(text=txt, callback_data=CallbackFactory(action='dev', value=txt))
     elif callback_data.action == 'dev':
+
         if '⛔️' in callback_data.value:
             await callback.answer(
                 text="Данного расходника нет в наличии!",
@@ -235,8 +268,13 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
         builder = get_counter_keyboard()
     elif callback_data.action == 'num_confirm':
         add_state = True
+        ras_device_arr = [''] * 4
+        if ras_device != '':
+            for item in ras[ras_type][ras_proizv]:
+                if item[0] + ' ' + item[1] in ras_device:
+                    ras_device_arr = item
         for item in user_data[callback.from_user.username][1]:
-            if item[0] == liq_name + ' ' + liq_taste or item[0] == ras_proizv + ' ' + ras_device[0] + ras_device[1] + 'Ом':
+            if item[0] == liq_name + ' ' + liq_taste or item[0] == ras_proizv + ' ' + ras_device_arr[0] + ' ' + ras_device_arr[1] + 'Ом':
                 item[1] += user_data[callback.from_user.username][0][0]
                 add_state = False
         if add_state:
@@ -246,12 +284,19 @@ async def callbacks_change_liquids_keyboard(callback: types.CallbackQuery, callb
                      liquids[liq_mg][liq_name][0][2]]
                 )
                 text = 'Жидкость добавлена!'
+                user_data[callback.from_user.username][0][3] = ''
             else:
+                for item in ras[ras_type][ras_proizv]:
+                    if item[0] + ' ' + item[1] in ras_device:
+                        ras_device_arr = item
                 user_data[callback.from_user.username][1].append(
-                    [ras_proizv + ' ' + ras_device[0] + ras_device[1] + 'Ом', user_data[callback.from_user.username][0][0],
-                     ras_device[3]]
+                    [ras_proizv + ' ' + ras_device_arr[0] + ' ' + ras_device_arr[1] + 'Ом',
+                     user_data[callback.from_user.username][0][0],
+                     ras_device_arr[3]]
                 )
                 text = 'Расходник добавлен!'
+                user_data[callback.from_user.username][0][6] = ''
+                user_data[callback.from_user.username][0][7] = ''
         user_data[callback.from_user.username][0][8] = bool
         user_data[callback.from_user.username][0][0] = 1
         await callback.message.edit_text(
@@ -315,7 +360,7 @@ def get_cart(username):
     price = 0
     for item in user_data[username][1]:
         res += f'{user_data[username][1].index(item) + 1}. {item[0]} - {item[1]}шт - {item[2]} BYN\n'
-        price += float('.'.join(item[2].split(',')))
+        price += float('.'.join(item[2].split(','))) * item[1]
     res += f'\nИтого: {price} BYN'
     return res
 
