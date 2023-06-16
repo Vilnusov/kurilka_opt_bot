@@ -1,3 +1,5 @@
+from aiogram.fsm.storage.memory import MemoryStorage
+
 from cfg import *
 from getter import get_liquids, get_ras
 from aiogram.fsm.context import FSMContext
@@ -25,8 +27,9 @@ class States(StatesGroup):
 
 # 'https://kalix.club/uploads/posts/2022-12/1671755316_kalix-club-p-veip-art-oboi-66.jpg'
 # logging.basicConfig(level=logging.INFO)
+storage = MemoryStorage()
 bot = Bot(token=TOKEN, parse_mode='HTML')
-dp = Dispatcher()
+dp = Dispatcher(storage=storage)
 
 user_data = {}
 liquids = []
